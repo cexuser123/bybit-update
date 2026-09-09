@@ -11,7 +11,7 @@ Single-file Node.js bot that checks your **Bybit wallet balance** and **deposit 
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 14+ (Node LTS recommended)
 - Bybit API key + secret with **Read** permissions for Account / Asset
 
 > Do **not** enable withdraw permissions for this bot. Read-only keys are enough.
@@ -22,6 +22,8 @@ Single-file Node.js bot that checks your **Bybit wallet balance** and **deposit 
 cd D:\Cex\bybit
 npm install
 ```
+
+This bot uses only Node built-ins (`https` and `crypto`) for signing requests, so it does not depend on `bybit-api`.
 
 Open `bot.js` and set your credentials at the top:
 

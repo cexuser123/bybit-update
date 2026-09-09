@@ -9,7 +9,8 @@
  *   node bot.js check BTC BTC   # balance + address for coin/chain
  */
 
-const { RestClientV5 } = require('bybit-api');
+const https = require('https');
+const crypto = require('crypto');
 
 // ====== CONFIG — put your keys here ======
 const API_KEY = '8N5lNW6IdoQaq0tqga';
@@ -19,6 +20,8 @@ const ACCOUNT_TYPE = 'UNIFIED'; // UNIFIED | CONTRACT
 const DEFAULT_COIN = 'USDT';
 const DEFAULT_CHAIN = 'ETH';
 // =========================================
+const RECV_WINDOW = '5000';
+const BASE_URL = TESTNET ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com';
 
 function fail(message) {
   console.error(`\n[ERROR] ${message}\n`);
@@ -31,11 +34,58 @@ function ensureCredentials() {
   }
 }
 
-function createClient() {
-  return new RestClientV5({
-    key: API_KEY,
-    secret: API_SECRET,
-    testnet: TESTNET,
+function buildQuery(params) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value !== undefined && value !== null && value !== '') {
+      search.append(key, String(value));
+    }
+  }
+  return search.toString();
+}
+
+function signRequest(queryString, timestamp) {
+  const payload = `${timestamp}${API_KEY}${RECV_WINDOW}${queryString}`;
+  return crypto.createHmac('sha256', API_SECRET).update(payload).digest('hex');
+}
+
+function httpGet(url, headers) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers,
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(body);
+            resolve(parsed);
+          } catch (error) {
+            reject(new Error(`Failed to parse response: ${body}`));
+          }
+        });
+      }
+    );
+    req.on('error', (error) => reject(error));
+  });
+}
+
+async function privateGet(path, params) {
+  const queryString = buildQuery(params);
+  const timestamp = String(Date.now());
+  const signature = signRequest(queryString, timestamp);
+  const url = `${BASE_URL}${path}${queryString ? `?${queryString}` : ''}`;
+
+  return httpGet(url, {
+    'X-BAPI-API-KEY': API_KEY,
+    'X-BAPI-TIMESTAMP': timestamp,
+    'X-BAPI-RECV-WINDOW': RECV_WINDOW,
+    'X-BAPI-SIGN': signature,
   });
 }
 
@@ -51,10 +101,10 @@ function printKv(label, value) {
   console.log(`  ${pad}: ${value ?? '-'}`);
 }
 
-async function checkBalance(client, coinFilter) {
+async function checkBalance(coinFilter) {
   printHeader(`Wallet Balance (${ACCOUNT_TYPE}${TESTNET ? ' · TESTNET' : ''})`);
 
-  const response = await client.getWalletBalance({
+  const response = await privateGet('/v5/account/wallet-balance', {
     accountType: ACCOUNT_TYPE,
     ...(coinFilter ? { coin: coinFilter } : {}),
   });
@@ -108,10 +158,13 @@ async function checkBalance(client, coinFilter) {
   }
 }
 
-async function checkAddress(client, coin, chain) {
+async function checkAddress(coin, chain) {
   printHeader(`Deposit Address (${coin}${chain ? ` / ${chain}` : ''}${TESTNET ? ' · TESTNET' : ''})`);
 
-  const response = await client.getMasterDepositAddress(coin, chain || undefined);
+  const response = await privateGet('/v5/asset/deposit/query-address', {
+    coin,
+    chainType: chain || undefined,
+  });
 
   if (response.retCode !== 0) {
     fail(`Address request failed: [${response.retCode}] ${response.retMsg}`);
@@ -166,8 +219,6 @@ async function main() {
   }
 
   ensureCredentials();
-  const client = createClient();
-
   const coin = (arg1 || DEFAULT_COIN).toUpperCase();
   const chain = (arg2 || DEFAULT_CHAIN).toUpperCase();
 
@@ -175,12 +226,12 @@ async function main() {
 
   try {
     if (cmd === 'balance') {
-      await checkBalance(client, arg1 ? coin : undefined);
+      await checkBalance(arg1 ? coin : undefined);
     } else if (cmd === 'address') {
-      await checkAddress(client, coin, arg2 ? chain : DEFAULT_CHAIN);
+      await checkAddress(coin, arg2 ? chain : DEFAULT_CHAIN);
     } else if (cmd === 'check' || cmd === 'all') {
-      await checkBalance(client, arg1 ? coin : undefined);
-      await checkAddress(client, coin, arg2 ? chain : DEFAULT_CHAIN);
+      await checkBalance(arg1 ? coin : undefined);
+      await checkAddress(coin, arg2 ? chain : DEFAULT_CHAIN);
     } else {
       fail(`Unknown command "${cmd}". Use: balance | address | check`);
     }

@@ -17,7 +17,5 @@
     "address"
   ],
   "license": "MIT",
-  "dependencies": {
-    "bybit-api": "^4.4.2"
-  }
+  "dependencies": {}
 }
