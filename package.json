@@ -1,0 +1,23 @@
+{
+  "name": "bybit-balance-address-bot",
+  "version": "1.0.0",
+  "description": "Single-file Bybit bot to check wallet balance and deposit addresses",
+  "main": "bot.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node bot.js",
+    "balance": "node bot.js balance",
+    "address": "node bot.js address",
+    "check": "node bot.js check"
+  },
+  "keywords": [
+    "bybit",
+    "balance",
+    "deposit",
+    "address"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bybit-api": "^4.4.2"
+  }
+}
